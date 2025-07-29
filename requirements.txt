@@ -1,0 +1,13 @@
+asgiref==3.9.1
+charset-normalizer==3.4.2
+dj-database-url==3.0.1
+Django==5.2.4
+django-cors-headers==4.7.0
+djangorestframework==3.16.0
+gunicorn==23.0.0
+psycopg==3.2.9
+psycopg-binary==3.2.9
+python-decouple==3.8
+requests==2.32.4
+urllib3==2.5.0
+whitenoise==6.9.0
