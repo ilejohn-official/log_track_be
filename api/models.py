@@ -1,5 +1,4 @@
 from django.db import models
-from django.contrib.postgres.fields import JSONField
 
 
 class Trip(models.Model):
@@ -36,7 +35,7 @@ class DailyLog(models.Model):
     trip = models.ForeignKey(Trip, related_name="logs", on_delete=models.CASCADE)
     day_number = models.IntegerField()
     date = models.DateField()
-    log_entries = JSONField() 
+    log_entries = models.JSONField()
 
     def __str__(self):
         return f"Log Day {self.day_number} for Trip {self.trip.id}"
