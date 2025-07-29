@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Django
+*.sqlite3
+db.sqlite3
+media/
+staticfiles/
+static/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Environment
+.env
+venv/
+.venv/
+env/
+.env/
+
+# Packaging
+*.egg-info/
+dist/
+
+# Node (if using React or other JS frontend)
+node_modules/
