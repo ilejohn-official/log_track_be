@@ -8,6 +8,12 @@ from .models import Trip, RouteStop, DailyLog
 from .serializers import TripSerializer
 
 ORS_API_KEY = settings.ORS_API_KEY
+STATUS_Y_POSITIONS = {
+    "OffDuty": 0,
+    "Sleeper": 1,
+    "Driving": 2,
+    "OnDuty": 3
+}
 
 class TripPlannerView(APIView):
     def post(self, request):
@@ -100,18 +106,68 @@ class TripPlannerView(APIView):
         return stops
 
     def _generate_daily_logs(self, distance_miles, cycle_used):
-        """Generate logs with HOS: 11hr driving/day, 10hr rest, 1hr pickup/drop"""
+        """
+        Generate daily log entries for a trip based on HOS rules:
+        - 11hr driving/day
+        - 10hr sleeper/rest per day
+        - 1hr on-duty for pickup/dropoff (first day only)
+        - 70hr/8day cycle
+        - Each log entry: {start, end, status, y_position}
+        """
         driving_hours_total = distance_miles / 50  # 50 mph avg
+        available_hours = max(0, 70 - cycle_used)  # Remaining HOS in cycle
+        total_hours_needed = driving_hours_total + (1 if driving_hours_total > 0 else 0)  # Driving + pickup/drop duty
+
+        if available_hours <= 1:
+            return []  # No usable hours left in the cycle
+        
+        if total_hours_needed > available_hours:
+            driving_hours_total = max(0, available_hours - 1)  # Deduct 1hr for on-duty
+            
         days = []
+        first_day = True
+
         while driving_hours_total > 0:
-            day_hours = []
-            on_duty = 1 if len(days) == 0 or driving_hours_total <= 11 else 0
-            driving = min(11, driving_hours_total)
-            off_duty = 24 - (driving + on_duty + 10)
-            day_hours.append({"start": 0, "end": on_duty, "status": "OnDuty"})
-            day_hours.append({"start": on_duty, "end": on_duty + driving, "status": "Driving"})
-            day_hours.append({"start": on_duty + driving, "end": 24 - 10, "status": "OffDuty"})
-            day_hours.append({"start": 24 - 10, "end": 24, "status": "Sleeper"})
-            days.append(day_hours)
+            entries = []
+            current_time = 0
+            # 1hr on-duty for pickup/dropoff only on first day
+            on_duty = 1 if first_day else 0
+            if on_duty:
+                entries.append({
+                    "start": current_time,
+                    "end": current_time + on_duty,
+                    "status": "OnDuty",
+                    "y_position": STATUS_Y_POSITIONS["OnDuty"]
+                })
+                current_time += on_duty
+            driving = round(min(11, driving_hours_total), 2)
+            if driving > 0:
+                entries.append({
+                    "start": current_time,
+                    "end": current_time + driving,
+                    "status": "Driving",
+                    "y_position": STATUS_Y_POSITIONS["Driving"]
+                })
+                current_time += driving
+            # OffDuty is whatever is left after 10hr sleeper, driving, and on_duty
+            off_duty = max(0, 24 - (10 + driving + on_duty))
+            if off_duty > 0:
+                entries.append({
+                    "start": current_time,
+                    "end": current_time + off_duty,
+                    "status": "OffDuty",
+                    "y_position": STATUS_Y_POSITIONS["OffDuty"]
+                })
+                current_time += off_duty
+            # 10hr sleeper at end of day
+            entries.append({
+                "start": current_time,
+                "end": 24,
+                "status": "Sleeper",
+                "y_position": STATUS_Y_POSITIONS["Sleeper"]
+            })
+            days.append(entries)
             driving_hours_total -= driving
+            first_day = False
         return days
+
