@@ -1,5 +1,6 @@
 import requests
 import datetime
+import polyline
 from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -36,9 +37,12 @@ class TripPlannerView(APIView):
             body = {"coordinates": coords}
             headers = {"Authorization": ORS_API_KEY, "Content-Type": "application/json"}
             route_resp = requests.post(route_url, json=body, headers=headers).json()
+            route_coords = polyline.decode(route_resp['routes'][0]['geometry'])
             distance_km = route_resp['routes'][0]['summary']['distance'] / 1000
             distance_miles = round(distance_km * 0.621371, 2)
+            
         except Exception as e:
+            print("Error fetching route_coords:", e)
             return Response({"error": "Failed to fetch route."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Step 2: Calculate stops
@@ -77,8 +81,9 @@ class TripPlannerView(APIView):
                 log_entries=day
             )
 
-        serializer = TripSerializer(trip)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        data = TripSerializer(trip).data
+        data['route_points'] = route_coords
+        return Response(data, status=status.HTTP_201_CREATED)
 
     def _geocode_locations(self, locations):
         """Convert addresses to [lng, lat] using ORS geocoding"""
