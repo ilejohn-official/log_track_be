@@ -116,13 +116,13 @@ class TripPlannerView(APIView):
         """
         driving_hours_total = distance_miles / 50  # 50 mph avg
         available_hours = max(0, 70 - cycle_used)  # Remaining HOS in cycle
-        total_hours_needed = driving_hours_total + (1 if driving_hours_total > 0 else 0)  # Driving + pickup/drop duty
+        total_hours_needed = driving_hours_total + (2 if driving_hours_total > 0 else 0)  # Driving + 1hr pickup + 1hr dropoff
 
         if available_hours <= 1:
             return []  # No usable hours left in the cycle
         
         if total_hours_needed > available_hours:
-            driving_hours_total = max(0, available_hours - 1)  # Deduct 1hr for on-duty
+            driving_hours_total = max(0, available_hours - 2)  # Subtract pickup & dropoff hours
             
         days = []
         first_day = True
@@ -150,7 +150,7 @@ class TripPlannerView(APIView):
                 })
                 current_time += driving
             # OffDuty is whatever is left after 10hr sleeper, driving, and on_duty
-            off_duty = max(0, 24 - (10 + driving + on_duty))
+            off_duty = max(0, 24 - (10 + driving + on_duty + (1 if driving_hours_total - driving <= 0 else 0)))
             if off_duty > 0:
                 entries.append({
                     "start": current_time,
@@ -159,13 +159,27 @@ class TripPlannerView(APIView):
                     "y_position": STATUS_Y_POSITIONS["OffDuty"]
                 })
                 current_time += off_duty
+
             # 10hr sleeper at end of day
+            sleeper_start = current_time
+            sleeper_end = 24 - (1 if driving_hours_total - driving <= 0 else 0)  # Leave space for final on-duty if last day
             entries.append({
-                "start": current_time,
-                "end": 24,
+                "start": sleeper_start,
+                "end": sleeper_end,
                 "status": "Sleeper",
                 "y_position": STATUS_Y_POSITIONS["Sleeper"]
             })
+            current_time = sleeper_end
+            # 1hr on-duty for drop-off if this is the last day
+            if driving_hours_total - driving <= 0:  # Last day
+                entries.append({
+                    "start": current_time,
+                    "end": current_time + 1,
+                    "status": "OnDuty",
+                    "y_position": STATUS_Y_POSITIONS["OnDuty"]
+                })
+                current_time += 1
+
             days.append(entries)
             driving_hours_total -= driving
             first_day = False
